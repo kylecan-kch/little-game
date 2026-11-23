@@ -12,8 +12,10 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.foundation.shape.RoundedCornerShape
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
+import androidx.compose.runtime.getValue
 import androidx.compose.runtime.key
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberUpdatedState
 import androidx.compose.ui.Alignment
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.draw.clip
@@ -47,12 +49,14 @@ fun GameBoard(
     onSwipe: (Direction) -> Unit,
     modifier: Modifier = Modifier,
 ) {
+    val gesturesEnabled by rememberUpdatedState(enabled)
+    val swipe by rememberUpdatedState(onSwipe)
     BoxWithConstraints(modifier, contentAlignment = Alignment.Center) {
         val side = minOf(maxWidth, maxHeight)
-        val gap = style.gridGap
-        val pad = style.gridPadding
-        val cell = (side - pad * 2 - gap * 3) / 4
-        if (cell <= 0.dp) return@BoxWithConstraints
+        val fit = fitBoard(side, style.gridPadding, style.gridGap) ?: return@BoxWithConstraints
+        val cell = fit.cell
+        val gap = fit.gap
+        val pad = fit.pad
         val metrics = cellMetrics(cell, gap, pad)
         Box(
             Modifier
@@ -60,8 +64,7 @@ fun GameBoard(
                 .clip(RoundedCornerShape(style.chrome.corner))
                 .boardSurface(style)
                 .semantics { contentDescription = boardDescription }
-                .pointerInput(enabled) {
-                    if (!enabled) return@pointerInput
+                .pointerInput(Unit) {
                     var total = Offset.Zero
                     detectDragGestures(
                         onDragStart = { total = Offset.Zero },
@@ -70,6 +73,7 @@ fun GameBoard(
                             change.consume()
                         },
                         onDragEnd = {
+                            if (!gesturesEnabled) return@detectDragGestures
                             val threshold = 36.dp.toPx()
                             val dx = total.x
                             val dy = total.y
@@ -79,7 +83,7 @@ fun GameBoard(
                             } else {
                                 if (dy > 0f) Direction.Down else Direction.Up
                             }
-                            onSwipe(direction)
+                            swipe(direction)
                         },
                     )
                 },
@@ -118,7 +122,7 @@ private fun MovingTile(
     val x = remember(tile.id) { Animatable(metrics.paddingPx + tile.fromCol * metrics.stridePx) }
     val y = remember(tile.id) { Animatable(metrics.paddingPx + tile.fromRow * metrics.stridePx) }
     val scale = remember(tile.id) { Animatable(if (tile.spawned) 0.15f else 1f) }
-    LaunchedEffect(tile.moveId, metrics.stridePx, metrics.paddingPx) {
+    LaunchedEffect(tile.moveId, tile.row, tile.col, metrics.stridePx, metrics.paddingPx) {
         val targetX = metrics.paddingPx + tile.col * metrics.stridePx
         val targetY = metrics.paddingPx + tile.row * metrics.stridePx
         if (tile.spawned || (tile.fromCol == tile.col && tile.fromRow == tile.row)) {
@@ -148,6 +152,7 @@ private fun MovingTile(
     ArtTile(
         style = style,
         value = tile.value,
+        cellSize = cell,
         contentDescription = stringResource(R.string.cd_tile, tile.value),
         modifier = Modifier
             .zIndex(if (tile.merged) 1f else 0f)
@@ -180,6 +185,7 @@ private fun GhostTile(
     ArtTile(
         style = style,
         value = ghost.value,
+        cellSize = cell,
         modifier = Modifier
             .zIndex(0.5f)
             .graphicsLayer {
@@ -193,4 +199,19 @@ private fun GhostTile(
             }
             .size(cell),
     )
+}
+
+private data class BoardFit(val cell: Dp, val gap: Dp, val pad: Dp)
+
+/** Keeps every cell positive when padding and gaps would otherwise consume the board. */
+private fun fitBoard(side: Dp, pad: Dp, gap: Dp): BoardFit? {
+    if (!side.value.isFinite() || side <= 0.dp) return null
+    val chrome = pad * 2 + gap * 3
+    if (side > chrome) {
+        val cell = (side - chrome) / 4
+        if (cell > 0.dp) return BoardFit(cell, gap, pad)
+    }
+    val cell = side / 4
+    if (cell <= 0.dp) return null
+    return BoardFit(cell = cell, gap = 0.dp, pad = 0.dp)
 }

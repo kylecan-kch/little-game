@@ -386,6 +386,123 @@ class Game2048Test {
     }
 
     @Test
+    fun normalize_playingWithNoMoves_becomesLost() {
+        val stuck = GameState(
+            board(
+                """
+                2 4 2 4
+                4 2 4 2
+                2 4 2 4
+                4 2 4 2
+                """.trimIndent(),
+                status = Status.Playing,
+            ),
+        )
+        val normalized = Game2048().normalize(stuck)
+        assertEquals(Status.Lost, normalized.board.status)
+        assertEquals(stuck.board.cells, normalized.board.cells)
+        assertEquals(stuck.board.score, normalized.board.score)
+    }
+
+    @Test
+    fun normalize_wonWithoutWinTile_becomesPlaying() {
+        val fakeWin = GameState(
+            board(
+                """
+                2 2 _ _
+                _ _ _ _
+                _ _ _ _
+                _ _ _ _
+                """.trimIndent(),
+                status = Status.Won,
+            ),
+        )
+        assertEquals(Status.Playing, Game2048().normalize(fakeWin).board.status)
+    }
+
+    @Test
+    fun normalize_wonWithoutWinTileAndNoMoves_becomesLost() {
+        val fakeWin = GameState(
+            board(
+                """
+                2 4 2 4
+                4 2 4 2
+                2 4 2 4
+                4 2 4 2
+                """.trimIndent(),
+                status = Status.Won,
+            ),
+        )
+        assertEquals(Status.Lost, Game2048().normalize(fakeWin).board.status)
+    }
+
+    @Test
+    fun normalize_realWinWithNoMoves_staysWon() {
+        val won = Board(
+            cells = listOf(
+                2048, 2, 4, 8,
+                16, 32, 64, 128,
+                256, 512, 2, 4,
+                8, 16, 32, 64,
+            ).mapIndexed { index, value -> Tile(index + 1, value) },
+            status = Status.Won,
+            nextId = 17,
+        )
+        assertFalse(Game2048().hasMoves(won))
+        assertEquals(Status.Won, Game2048().normalize(GameState(won)).board.status)
+    }
+
+    @Test
+    fun normalize_isIdempotentForAPlayableBoard() {
+        val state = GameState(board("2 2 _ _\n_ _ _ _\n_ _ _ _\n_ _ _ _"))
+        val once = Game2048().normalize(state)
+        assertEquals(state, once)
+        assertEquals(once, Game2048().normalize(once))
+    }
+
+    @Test
+    fun normalize_repairsTheUndoSnapshotToo() {
+        val undo = board(
+            """
+            2 4 2 4
+            4 2 4 2
+            2 4 2 4
+            4 2 4 2
+            """.trimIndent(),
+            status = Status.Playing,
+        )
+        val current = board("2 _ _ _\n_ _ _ _\n_ _ _ _\n_ _ _ _")
+        val normalized = Game2048().normalize(GameState(current, undo))
+        assertEquals(Status.Playing, normalized.board.status)
+        assertEquals(Status.Lost, normalized.undo!!.status)
+    }
+
+    @Test
+    fun undo_afterLoss_restoresAPlayableBoard() {
+        val start = GameState(
+            board(
+                """
+                2 4 8 16
+                4 2 16 8
+                8 16 4 2
+                32 _ 64 128
+                """.trimIndent(),
+            ),
+        )
+        val game = Game2048(SequenceIntSource(0, 0))
+        val lost = game.move(start, Direction.Left)
+        assertEquals(Status.Lost, lost.state.board.status)
+        assertTrue(lost.state.canUndo)
+        val undone = game.undo(lost.state)
+        assertEquals(start.board, undone.board)
+        assertEquals(Status.Playing, undone.board.status)
+        assertFalse(undone.canUndo)
+        assertEquals(undone, game.undo(undone))
+        val resumed = Game2048(SequenceIntSource()).move(undone, Direction.Right, spawnAfterMove = false)
+        assertTrue(resumed.moved)
+    }
+
+    @Test
     fun undo_restoresThePreviousBoardOnce() {
         val start = GameState(
             board(
@@ -460,6 +577,88 @@ class GameStateCodecTest {
         assertEquals(moved.state, decoded)
         assertEquals(4, decoded!!.board.tileAt(0, 0)!!.value)
         assertEquals(start, decoded.undo)
+    }
+
+    @Test
+    fun encode_recordsBoardSizeAndStillRoundTrips() {
+        val state = GameState(board("2 _ _ _\n_ _ _ _\n_ _ _ _\n_ _ _ _", score = 6))
+        val encoded = GameStateCodec.encode(state)
+        assertTrue(encoded.startsWith("v2\n4\n"))
+        val decoded = GameStateCodec.decode(encoded)
+        assertEquals(4, decoded!!.board.size)
+        assertEquals(state, decoded)
+    }
+
+    @Test
+    fun roundTrip_preservesANonStandardSize() {
+        val cells = List(9) { index -> if (index == 0) Tile(1, 2) else null }
+        val state = GameState(Board(size = 3, cells = cells, score = 4, nextId = 2))
+        val encoded = GameStateCodec.encode(state)
+        assertTrue(encoded.startsWith("v2\n3\n"))
+        val decoded = GameStateCodec.decode(encoded)
+        assertEquals(state, decoded)
+        assertEquals(3, decoded!!.board.size)
+        assertEquals(9, decoded.board.cells.size)
+    }
+
+    @Test
+    fun decode_v1WithoutSize_stillLoadsAsFourByFour() {
+        val v1 = """
+            v1
+            12
+            Playing
+            3
+            1:2,.,.,.,.,.,.,.,.,.,.,.,.,.,.,2:4
+            -
+        """.trimIndent()
+        val decoded = GameStateCodec.decode(v1)
+        assertEquals(4, decoded!!.board.size)
+        assertEquals(16, decoded.board.cells.size)
+        assertEquals(2, decoded.board.tileAt(0, 0)!!.value)
+        assertEquals(4, decoded.board.tileAt(3, 3)!!.value)
+        assertEquals(12, decoded.board.score)
+        assertEquals(Status.Playing, decoded.board.status)
+        assertNull(decoded.undo)
+    }
+
+    @Test
+    fun decode_rejectsCellCountThatDoesNotMatchStoredSize() {
+        val short = """
+            v2
+            4
+            0
+            Playing
+            1
+            ${List(9) { "." }.joinToString(",")}
+            -
+        """.trimIndent()
+        assertNull(GameStateCodec.decode(short))
+        val legacyShort = "v1\n0\nPlaying\n1\n.\n-"
+        assertNull(GameStateCodec.decode(legacyShort))
+    }
+
+    @Test
+    fun decode_rejectsSizeOutsideTheSupportedRange() {
+        val tiny = """
+            v2
+            1
+            0
+            Playing
+            1
+            .
+            -
+        """.trimIndent()
+        assertNull(GameStateCodec.decode(tiny))
+        val huge = """
+            v2
+            9
+            0
+            Playing
+            1
+            ${List(81) { "." }.joinToString(",")}
+            -
+        """.trimIndent()
+        assertNull(GameStateCodec.decode(huge))
     }
 
     @Test

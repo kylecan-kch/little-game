@@ -17,7 +17,6 @@ import androidx.compose.ui.text.TextStyle
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.Dp
 import androidx.compose.ui.unit.dp
-import androidx.compose.ui.unit.sp
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.material3.Text
 import androidx.compose.ui.Alignment
@@ -39,10 +38,11 @@ fun ArtBackdrop(style: ArtStyle, modifier: Modifier = Modifier) {
 fun ArtTile(
     style: ArtStyle,
     value: Int,
+    cellSize: Dp,
     modifier: Modifier = Modifier,
     contentDescription: String? = null,
 ) {
-    BoxWithConstraints(
+    Box(
         modifier = modifier.then(
             if (contentDescription != null) {
                 Modifier.semantics { this.contentDescription = contentDescription }
@@ -60,7 +60,7 @@ fun ArtTile(
                     onDrawBehind { paint() }
                 },
         )
-        if (!style.drawsOwnNumbers) {
+        if (!style.drawsOwnNumbers && cellSize > 0.dp) {
             val digits = value.toString().length
             val factor = when {
                 digits <= 2 -> 0.42f
@@ -68,7 +68,8 @@ fun ArtTile(
                 digits == 4 -> 0.24f
                 else -> 0.18f
             }
-            val fontSize = (maxWidth.value * factor).sp
+            // dp.toSp() cancels fontScale, so a large system font does not clip the number.
+            val fontSize = with(LocalDensity.current) { (cellSize * factor).toSp() }
             Text(
                 text = value.toString(),
                 color = style.numberColor(value),
@@ -78,6 +79,7 @@ fun ArtTile(
                 letterSpacing = style.numberLetterSpacing,
                 textAlign = TextAlign.Center,
                 maxLines = 1,
+                softWrap = false,
                 style = TextStyle(
                     shadow = style.numberShadow(value),
                     lineHeight = fontSize,
@@ -109,6 +111,7 @@ fun ThemePreview(style: ArtStyle, modifier: Modifier = Modifier) {
                 ArtTile(
                     style = style,
                     value = value,
+                    cellSize = tile,
                     modifier = Modifier
                         .offset(x = originX + (tile + gap) * column, y = originY + (tile + gap) * row)
                         .size(tile),

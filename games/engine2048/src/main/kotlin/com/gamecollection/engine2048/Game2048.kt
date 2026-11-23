@@ -75,6 +75,30 @@ class Game2048(
         return state.copy(board = state.board.copy(status = status))
     }
 
+    /**
+     * Repairs a status that was saved incorrectly.
+     *
+     * A board with no legal moves is Lost, except a genuine win (a tile of at least
+     * 2048) which stays Won so the player can still choose to continue. Won with no
+     * such tile is Playing when moves remain, and Lost when they do not.
+     */
+    fun normalize(state: GameState): GameState {
+        val board = normalizedBoard(state.board)
+        val undo = state.undo?.let(::normalizedBoard)
+        return if (board == state.board && undo == state.undo) state else GameState(board, undo)
+    }
+
+    private fun normalizedBoard(board: Board): Board {
+        val hasWinTile = board.cells.any { (it?.value ?: 0) >= WIN_VALUE }
+        val status = when {
+            board.status == Status.Won && hasWinTile -> Status.Won
+            !hasMoves(board) -> Status.Lost
+            board.status == Status.Won -> Status.Playing
+            else -> board.status
+        }
+        return if (status == board.status) board else board.copy(status = status)
+    }
+
     fun hasMoves(board: Board): Boolean {
         if (board.cells.any { it == null }) return true
         val size = board.size
