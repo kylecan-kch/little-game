@@ -78,9 +78,11 @@ class Game2048(
     /**
      * Repairs a status that was saved incorrectly.
      *
-     * A board with no legal moves is Lost, except a genuine win (a tile of at least
-     * 2048) which stays Won so the player can still choose to continue. Won with no
-     * such tile is Playing when moves remain, and Lost when they do not.
+     * No legal moves is Lost, except a genuine win (Won, and a tile of at least 2048),
+     * which stays Won so the player can still continue. Won with no such tile becomes
+     * Playing when moves remain. Lost with moves left becomes Playing, unless a 2048
+     * tile is already on the board: that is Continuing, same as Playing with a 2048
+     * tile, so the next swipe does not open the win dialog again.
      */
     fun normalize(state: GameState): GameState {
         val board = normalizedBoard(state.board)
@@ -90,10 +92,13 @@ class Game2048(
 
     private fun normalizedBoard(board: Board): Board {
         val hasWinTile = board.cells.any { (it?.value ?: 0) >= WIN_VALUE }
+        val moves = hasMoves(board)
         val status = when {
+            !moves -> if (board.status == Status.Won && hasWinTile) Status.Won else Status.Lost
             board.status == Status.Won && hasWinTile -> Status.Won
-            !hasMoves(board) -> Status.Lost
             board.status == Status.Won -> Status.Playing
+            hasWinTile && (board.status == Status.Lost || board.status == Status.Playing) -> Status.Continuing
+            board.status == Status.Lost -> Status.Playing
             else -> board.status
         }
         return if (status == board.status) board else board.copy(status = status)

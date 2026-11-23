@@ -12,7 +12,6 @@ import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Row
 import androidx.compose.foundation.layout.Spacer
 import androidx.compose.foundation.layout.WindowInsets
-import androidx.compose.foundation.layout.aspectRatio
 import androidx.compose.foundation.layout.fillMaxHeight
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.fillMaxWidth
@@ -31,6 +30,7 @@ import androidx.compose.material3.Icon
 import androidx.compose.material3.IconButton
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.SideEffect
 import androidx.compose.runtime.remember
 import androidx.compose.ui.Alignment
@@ -73,7 +73,11 @@ fun Game2048Screen(
     onContinue: () -> Unit,
     onOpenThemes: () -> Unit,
     onBack: () -> Unit,
+    onLeave: () -> Unit,
 ) {
+    DisposableEffect(Unit) {
+        onDispose(onLeave)
+    }
     val style = ArtStyles.byId(state.themeId)
     StatusBarIcons(lightIcons = style.lightStatusIcons)
     val haptic = LocalHapticFeedback.current
@@ -186,8 +190,7 @@ private fun Playfield(
                 Modifier
                     .fillMaxSize()
                     .windowInsetsPadding(WindowInsets.safeDrawing)
-                    .padding(horizontal = 16.dp, vertical = 6.dp)
-                    .verticalScroll(rememberScrollState()),
+                    .padding(horizontal = 16.dp, vertical = 6.dp),
             ) {
                 Header(style, onBack, onOpenThemes)
                 Spacer(Modifier.size(10.dp))
@@ -195,7 +198,12 @@ private fun Playfield(
                 Spacer(Modifier.size(10.dp))
                 ActionRow(style, state, onNewGame, onUndo)
                 Spacer(Modifier.size(10.dp))
-                Box(Modifier.fillMaxWidth().aspectRatio(1f)) {
+                Box(
+                    Modifier
+                        .weight(1f)
+                        .fillMaxWidth(),
+                    contentAlignment = Alignment.Center,
+                ) {
                     Board(style, state, onSwipe, Modifier.fillMaxSize())
                 }
                 Spacer(Modifier.size(8.dp))
@@ -258,7 +266,7 @@ private fun Hint(style: ArtStyle) {
         text = stringResource(R.string.hint),
         color = style.chrome.textMuted,
         fontFamily = style.fontFamily,
-        fontSize = with(LocalDensity.current) { 13.dp.toSp() },
+        fontSize = 13.sp,
         textAlign = TextAlign.Center,
         modifier = Modifier
             .fillMaxWidth()
@@ -281,7 +289,7 @@ private fun Header(style: ArtStyle, onBack: () -> Unit, onOpenThemes: () -> Unit
             color = style.chrome.textPrimary,
             fontFamily = style.fontFamily,
             fontWeight = FontWeight.Black,
-            fontSize = with(LocalDensity.current) { 28.dp.toSp() },
+            fontSize = 28.sp,
             modifier = Modifier.weight(1f),
         )
         ArtButton(
@@ -316,9 +324,7 @@ private fun ScoreCard(style: ArtStyle, label: String, value: Int, modifier: Modi
             text = label,
             color = style.chrome.textMuted,
             fontFamily = style.fontFamily,
-            fontSize = with(LocalDensity.current) { 12.dp.toSp() },
-            maxLines = 1,
-            softWrap = false,
+            fontSize = 12.sp,
         )
         FittedScore(
             text = value.toString(),
@@ -420,9 +426,7 @@ internal fun ArtButton(
             color = if (enabled) foreground else foreground.copy(alpha = 0.45f),
             fontFamily = fontFamily,
             fontWeight = FontWeight.Bold,
-            fontSize = with(LocalDensity.current) { 15.dp.toSp() },
-            maxLines = 1,
-            softWrap = false,
+            fontSize = 15.sp,
         )
     }
 }
@@ -472,7 +476,7 @@ private fun ArtDialog(
                     color = chrome.onPanel,
                     fontFamily = fontFamily,
                     fontWeight = FontWeight.Black,
-                    fontSize = with(LocalDensity.current) { 22.dp.toSp() },
+                    fontSize = 22.sp,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.size(8.dp))
@@ -480,7 +484,7 @@ private fun ArtDialog(
                     text = message,
                     color = chrome.onPanel.copy(alpha = 0.84f),
                     fontFamily = fontFamily,
-                    fontSize = with(LocalDensity.current) { 15.dp.toSp() },
+                    fontSize = 15.sp,
                     textAlign = TextAlign.Center,
                 )
                 Spacer(Modifier.size(16.dp))

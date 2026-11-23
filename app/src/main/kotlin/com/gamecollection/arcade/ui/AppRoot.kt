@@ -46,6 +46,7 @@ fun AppRoot(viewModel: Game2048ViewModel) {
                 onContinue = viewModel::continueAfterWin,
                 onOpenThemes = { destinationName = Destination.Themes.name },
                 onBack = { destinationName = Destination.Home.name },
+                onLeave = viewModel::onLeaveGame,
             )
         }
         Destination.Themes -> {

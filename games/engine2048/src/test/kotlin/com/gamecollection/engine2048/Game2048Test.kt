@@ -453,6 +453,93 @@ class Game2048Test {
     }
 
     @Test
+    fun normalize_lostWithMoves_becomesPlaying() {
+        val lost = GameState(
+            board(
+                """
+                2 2 _ _
+                _ _ _ _
+                _ _ _ _
+                _ _ _ _
+                """.trimIndent(),
+                status = Status.Lost,
+            ),
+        )
+        assertTrue(Game2048().hasMoves(lost.board))
+        val normalized = Game2048().normalize(lost)
+        assertEquals(Status.Playing, normalized.board.status)
+        assertEquals(Status.Playing, Game2048().normalize(normalized).board.status)
+    }
+
+    @Test
+    fun normalize_lostWithNoMoves_staysLost() {
+        val lost = GameState(
+            board(
+                """
+                2 4 2 4
+                4 2 4 2
+                2 4 2 4
+                4 2 4 2
+                """.trimIndent(),
+                status = Status.Lost,
+            ),
+        )
+        assertEquals(Status.Lost, Game2048().normalize(lost).board.status)
+    }
+
+    @Test
+    fun normalize_playingWith2048Tile_becomesContinuing() {
+        val playing = GameState(
+            board(
+                """
+                2048 _ _ _
+                _ _ _ _
+                _ _ _ _
+                _ _ _ _
+                """.trimIndent(),
+                status = Status.Playing,
+            ),
+        )
+        val normalized = Game2048().normalize(playing)
+        assertEquals(Status.Continuing, normalized.board.status)
+        assertEquals(2048, normalized.board.tileAt(0, 0)!!.value)
+        assertEquals(Status.Continuing, Game2048().normalize(normalized).board.status)
+    }
+
+    @Test
+    fun normalize_lostWithMovesAnd2048_becomesContinuing() {
+        val lost = GameState(
+            board(
+                """
+                2048 2 _ _
+                _ _ _ _
+                _ _ _ _
+                _ _ _ _
+                """.trimIndent(),
+                status = Status.Lost,
+            ),
+        )
+        assertTrue(Game2048().hasMoves(lost.board))
+        assertEquals(Status.Continuing, Game2048().normalize(lost).board.status)
+    }
+
+    @Test
+    fun normalize_playingWith2048AndNoMoves_becomesLost() {
+        val stuck = Board(
+            cells = listOf(
+                2048, 2, 4, 8,
+                16, 32, 64, 128,
+                256, 512, 2, 4,
+                8, 16, 32, 64,
+            ).mapIndexed { index, value -> Tile(index + 1, value) },
+            status = Status.Playing,
+            nextId = 17,
+        )
+        assertFalse(Game2048().hasMoves(stuck))
+        assertEquals(Status.Lost, Game2048().normalize(GameState(stuck)).board.status)
+    }
+
+    @Test
     fun normalize_isIdempotentForAPlayableBoard() {
         val state = GameState(board("2 2 _ _\n_ _ _ _\n_ _ _ _\n_ _ _ _"))
         val once = Game2048().normalize(state)

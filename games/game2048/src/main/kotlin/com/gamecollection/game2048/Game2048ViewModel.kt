@@ -120,10 +120,14 @@ class Game2048ViewModel(
             return
         }
         if (_ui.value.busy) {
-            pendingSwipes.addLast(direction)
+            if (pendingSwipes.size < MAX_QUEUED_SWIPES) pendingSwipes.addLast(direction)
             return
         }
         performSwipe(direction)
+    }
+
+    fun onLeaveGame() {
+        pendingSwipes.clear()
     }
 
     fun undo() {
@@ -263,20 +267,14 @@ class Game2048ViewModel(
     }
 
     private fun persist() {
-        if (!writesEnabled) {
-            if (!reportedWriteSkip) {
-                reportedWriteSkip = true
-                Log.w(TAG, "Not writing the 2048 save because the existing one could not be read")
-            }
-            return
-        }
         val snapshot = gameState
         val bestNow = best
         val themeNow = themeId
         viewModelScope.launch {
             persistMutex.withLock {
+                if (!ensureWritable()) return@withLock
                 try {
-                    repository.save(snapshot, bestNow, themeNow)
+                    repository.save(snapshot, maxOf(bestNow, best), themeNow)
                 } catch (t: Throwable) {
                     if (t is CancellationException) throw t
                     Log.e(TAG, "Failed to save 2048 game", t)
@@ -285,8 +283,30 @@ class Game2048ViewModel(
         }
     }
 
+    private suspend fun ensureWritable(): Boolean {
+        if (writesEnabled) return true
+        val reread = try {
+            repository.load()
+        } catch (t: Throwable) {
+            if (t is CancellationException) throw t
+            if (!reportedWriteSkip) {
+                reportedWriteSkip = true
+                Log.w(TAG, "Not writing the 2048 save because it still cannot be read", t)
+            }
+            return false
+        }
+        writesEnabled = true
+        reportedWriteSkip = false
+        if (reread.best > best) {
+            best = reread.best
+            _ui.update { it.copy(best = best) }
+        }
+        return true
+    }
+
     companion object {
         const val ANIMATION_MS = 200L
+        private const val MAX_QUEUED_SWIPES = 2
         private const val TAG = "Game2048"
 
         fun factory(repository: Game2048Repository): ViewModelProvider.Factory =
@@ -310,6 +330,9 @@ internal data class StartupPlan(
  * A failed read must not be treated as an empty save: doing so would replace a
  * good file, including the best score, with a new game. A missing state is a
  * first launch (or an undecodable payload) and may be persisted.
+ *
+ * The board UI only draws 4×4. A decoded board of another size, or an undo
+ * snapshot whose size differs from the current board, is treated as no save.
  */
 internal fun planStartup(
     readFailed: Boolean,
@@ -329,7 +352,8 @@ internal fun planStartup(
         )
     }
     val themeId = savedThemeId?.takeIf { it in themeIds } ?: defaultThemeId
-    val normalized = savedState?.let(normalize)
+    val usable = savedState?.takeIf { isFourByFourSave(it) }
+    val normalized = usable?.let(normalize)
     val storedBest = savedBest.coerceAtLeast(0)
     val best = if (normalized != null) maxOf(storedBest, normalized.board.score) else storedBest
     val persist = normalized == null || normalized != savedState || best != storedBest
@@ -339,6 +363,12 @@ internal fun planStartup(
         restored = normalized,
         persist = persist,
     )
+}
+
+internal fun isFourByFourSave(state: GameState): Boolean {
+    if (state.board.size != 4) return false
+    val undo = state.undo ?: return true
+    return undo.size == state.board.size
 }
 
 internal fun buildTiles(
