@@ -1,0 +1,27 @@
+<?xml version="1.0" encoding="utf-8"?>
+<resources>
+    <string name="score_current">当前分数</string>
+    <string name="score_best">最高分</string>
+    <string name="new_game">新游戏</string>
+    <string name="undo">撤销</string>
+    <string name="themes">画风</string>
+    <string name="back">返回</string>
+    <string name="hint">滑动屏幕，把相同数字叠到一起</string>
+    <string name="loading">正在读取存档</string>
+    <string name="win_title">合成了 2048</string>
+    <string name="win_message">这一步叠出了 2048。可以接着冲更高的数字，也可以重新开一局。</string>
+    <string name="keep_playing">继续挑战</string>
+    <string name="play_again">再来一局</string>
+    <string name="lose_title">没有可移动的步</string>
+    <string name="lose_message">格子满了，相邻数字也不再相同。这一局 %1$d 分。</string>
+    <string name="new_game_title">开始新游戏？</string>
+    <string name="new_game_message">当前棋盘会被清空，最高分还会留着。</string>
+    <string name="confirm">确定</string>
+    <string name="cancel">取消</string>
+    <string name="theme_picker_title">选择画风</string>
+    <string name="theme_picker_subtitle">选好的画风会记住，下一局还在。</string>
+    <string name="theme_in_use">使用中</string>
+    <string name="cd_board">2048 棋盘</string>
+    <string name="cd_back">返回</string>
+    <string name="cd_tile">数字 %1$d</string>
+</resources>
